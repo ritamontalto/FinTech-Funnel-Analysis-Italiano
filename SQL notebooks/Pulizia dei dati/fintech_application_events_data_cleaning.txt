@@ -1,0 +1,144 @@
+
+--- ATTIVITÀ DI PULIZIA DEI DATI, CONTROLLO QUALITÀ E VERIFICA DELLE REGOLE DI BUSINESS - APPLICATION EVENTS
+
+--- verifico che ciascuna loan ID qui presente esista nel dataset Loan Applications
+
+SELECT ae.loan_id
+FROM application_events AS ae
+LEFT JOIN loan_applications AS la
+ON ae.loan_id = la.loan_id
+WHERE la.loan_id IS NULL;
+
+--- nessun risultato, la condizione è valida
+
+
+--- essendo loan ID presenti anche nel dataset Loan Outcomes, verifico che questa condizione sia valida anche tra questi due dataset
+
+SELECT ae.loan_id
+FROM application_events AS ae
+LEFT JOIN loan_outcomes AS lo
+ON ae.loan_id = lo.loan_id
+WHERE lo.loan_id IS NULL;
+
+--- nessun risultato, è valida
+
+
+--- verifico la presenza di eventi duplicati, in particolare controllo se esistono righi duplicati 
+
+SELECT loan_id, status, event_datetime,
+COUNT(*) AS duplicates
+FROM application_events
+GROUP BY loan_id, status, event_datetime
+HAVING COUNT(*) > 1;
+
+--- nessun risultato, non ci sono duplicati
+
+
+--- controllo i dati nella colonna status 
+
+SELECT status
+FROM application_events
+GROUP BY status;
+
+--- I dati sono omogenei, nessun valore nullo o mancante
+
+
+--- controllo i dati nella colonna refusal reason 
+
+SELECT refusal_reason
+FROM application_events
+GROUP BY refusal_reason;
+
+
+--- trovo dei valori mancanti, li trasformo in valori nulli per standardizzarli
+
+SELECT refusal_reason,
+CASE 
+	WHEN refusal_reason = '' THEN NULL
+ELSE TRIM(refusal_reason)
+END AS refusal_reason_clean
+FROM application_events;
+
+
+--- inoltre verifico che refusal reasons esista soltanto in caso di rejected loans 
+
+--- inizio verificando la presenza di refusal reasons per i non rejected loans
+
+SELECT loan_id, status, refusal_reason
+FROM application_events
+WHERE status <> 'Rejected' AND refusal_reason IS NOT NULL AND refusal_reason <> ''
+
+--- nessuno
+
+
+--- poi controllo se esistono dei rejected loans senza la refusal reason
+
+SELECT loan_id, status, refusal_reason
+FROM application_events
+WHERE status = 'Rejected'
+AND refusal_reason IS NULL;
+
+--- nessuno
+
+
+--- controllo i dati nella colonna document issue flag 
+
+SELECT document_issue_flag
+FROM application_events
+GROUP BY document_issue_flag;
+
+--- i dati sono omogenei, nulla da modificare
+
+
+--- controllo i dati nella colonna fraud flag 
+
+SELECT fraud_flag 
+FROM application_events
+GROUP BY fraud_flag;
+
+--- anche qui i dati sono omogenei
+
+
+--- controllo anche se i dati in fraud flag sono allineati con i dati in refusal reasons  
+
+SELECT loan_id, fraud_flag, refusal_reason
+FROM application_events
+WHERE refusal_reason = 'Fraud flag' AND fraud_flag = 0;
+
+--- nessun risultato, la condizione è valida
+
+
+
+--- terminato il processo di pulizia dei dati, procedo con la creazione di un nuovo dataset in modo da non modificare il dataset originale ed ottenere un dataset con i dati puliti da poter scaricare ed utilizzare per le analisi 
+
+CREATE TABLE application_events_clean AS 
+SELECT
+event_id,
+loan_id,
+event_sequence,
+status,
+event_datetime,
+CASE 
+	WHEN refusal_reason = '' THEN NULL
+ELSE TRIM(refusal_reason)
+END AS refusal_reason,
+document_issue_flag,
+fraud_flag
+FROM application_events;
+
+
+--- concludo verificando che la quantità di loan ID univoche coincidano su entrambi i dataset
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM application_events;
+
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM application_events_clean;
+
+
+--- i risultati coincidono
+
+

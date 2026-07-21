@@ -1,0 +1,203 @@
+
+--- ATTIVITÀ DI PULIZIA DEI DATI, CONTROLLO QUALITÀ E VERIFICA DELLE REGOLE DI BUSINESS - LOAN APPLICATION
+
+--- inizio verificando la presenza di loan ID univoche 
+
+SELECT 
+COUNT(*)
+FROM loan_applications;
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM loan_applications;
+
+--- i risultati coincidono, pertanto non ci sono duplicati
+
+
+--- adesso verifico che ciascuna user ID di questo dataset esiste nel dataset Users
+
+SELECT la.loan_id, la.user_id
+FROM loan_applications AS la
+LEFT JOIN users AS u
+ON la.user_id = u.user_id
+WHERE u.user_id IS NULL;
+
+--- nessun risultato, la condizione è valida
+
+
+--- adesso verifico il formato dei dati nella colonna application date
+
+SELECT DISTINCT application_date
+FROM loan_applications
+GROUP BY application_date;
+
+--- il formato è omogeneo
+
+
+--- verifico la presenza di valori mancanti nella colonna requested amount 
+
+SELECT
+COUNT(*) AS total_loans,
+COUNT(requested_amount) AS present,
+COUNT(*)-COUNT(requested_amount) AS missing
+FROM loan_applications;
+
+--- nessuno
+
+
+--- controllo i dati nella colonna currency 
+
+SELECT currency
+FROM loan_applications
+GROUP BY currency;
+
+--- dati omogenei 
+
+
+--- verifico la presenza di valori mancanti nella colonna est credit score
+
+SELECT
+COUNT(*) AS total_loans,
+COUNT(est_credit_score) AS present,
+COUNT(*)-COUNT(est_credit_score) AS missing
+FROM loan_applications;
+
+
+--- 1232 valori mancanti trovati, mi accerto se sono mancanti o se ci sono dei valori nulli 
+
+SELECT est_credit_score,
+COUNT (*) AS total_loans
+FROM loan_applications
+GROUP BY est_credit_score;
+
+--- sono tutti valori nulli, nulla da modificare
+
+
+--- verifico la presenza di valori mancanti nella colonna requested term months 
+
+SELECT
+COUNT(*) AS total_loans,
+COUNT(requested_term_months) AS present,
+COUNT(*)-COUNT(requested_term_months) AS missing
+FROM loan_applications;
+
+
+--- trovo 1244 valori mancanti, anche qui mi accerto se sono mancanti o se ci sono dei valori nulli
+
+SELECT requested_term_months,
+COUNT (*) AS total_loans
+FROM loan_applications
+GROUP BY requested_term_months;
+
+--- anche questi sono tutti valori nulli
+
+
+--- verifico la presenza di valori mancanti nella colonna loan purpose 
+
+SELECT
+COUNT(*) AS total_loans,
+COUNT(loan_purpose) AS present,
+COUNT(*)-COUNT(loan_purpose) AS missing
+FROM loan_applications;
+
+--- nessuno
+
+
+--- adesso verifico la presenza di valori mancanti nella colonna acquisition channel
+
+SELECT
+COUNT(*) AS total_loans,
+COUNT(acquisition_channel) AS present,
+COUNT(*)-COUNT(acquisition_channel) AS missing
+FROM loan_applications;
+
+--- nessun valore mancante, procedo con un controllo di qualità dei dati ovvero che i dati nella colonna acquisition channels coincida con quelli nel dataset Users, in base all'indice in comune: user ID  
+
+SELECT
+la.loan_id,
+la.user_id,
+u.acquisition_channel AS users_channel,
+la.acquisition_channel AS applications_channel
+FROM loan_applications AS la
+JOIN users AS u
+ON la.user_id = u.user_id
+WHERE la.acquisition_channel <> u.acquisition_channel;
+
+
+--- risulta che i dati non coincidono, il che è un problema di qualità dei dati. Verifico la quantità di dati che non coincidono
+
+SELECT 
+COUNT(*) AS mismatches
+FROM loan_applications AS la
+JOIN users AS u
+ON la.user_id = u.user_id
+WHERE la.acquisition_channel IS DISTINCT FROM u.acquisition_channel;
+
+
+--- trovo 4105 discrepanze, una quantità rilevante. Indago ulteriormente e verifico se ciascun utente ha più di un acquisition channel
+
+SELECT user_id,
+COUNT(DISTINCT acquisition_channel) AS channel_count
+FROM loan_applications
+GROUP BY user_id
+HAVING COUNT(DISTINCT acquisition_channel) > 1
+ORDER BY channel_count DESC;
+
+--- ottengo che alcuni user ID ne hanno 2, altri hanno 3 acquisition channel diversi
+
+--- Per questo progetto vado a correggere i dati basandomi sul dataset Users, perché nel data model che ho sviluppato acquisition channel rappresenta il canale attraverso cui il cliente è stato acquisito in origine. Detto questo, la causa per cui esistono queste discrepanze potrebbe essere il fatto che ogni cliente può inviare diverse richieste di finanziamento, pertanto i dati presenti in Users sono più affidabili. Se questo fosse successo nella realtà, avrei subito notificato queste discrepanze ai collaboratori in azienda ed a coloro che si occupano della gestione, raccolta e stoccaggio dei dati, per identificare il problema e trovare una soluzione comune. 
+
+
+UPDATE loan_applications AS la
+SET acquisition_channel = u.acquisition_channel
+FROM users AS u
+WHERE la.user_id = u.user_id;
+
+
+--- verifico che le mie modifiche siano state acquisite
+
+SELECT
+la.loan_id,
+la.user_id,
+u.acquisition_channel AS users_channel,
+la.acquisition_channel AS applications_channel
+FROM loan_applications AS la
+JOIN users AS u
+ON la.user_id = u.user_id
+WHERE la.acquisition_channel <> u.acquisition_channel;
+
+--- nessuna discrepanza trovata, modifiche effettuate con successo 
+
+
+--- controllo i dati nella colonna outcome
+
+SELECT outcome
+FROM loan_applications 
+GROUP BY outcome;
+
+--- i dati sono omogenei
+
+
+--- Verificando la qualità e coerenza dei dati, la colonna outcome deve coincidere con i dati nella colonna status del dataset Application Events, in base all'ultimo evento della loan ID di riferimento
+
+WITH last_event AS (
+    SELECT loan_id,
+    MAX(event_sequence) AS last_sequence
+    FROM application_events
+    GROUP BY loan_id
+)
+SELECT la.loan_id, la.outcome, ae.status AS final_status
+FROM loan_applications AS la
+JOIN last_event AS le
+ON la.loan_id = le.loan_id
+JOIN application_events AS ae
+ON ae.loan_id = le.loan_id AND ae.event_sequence = le.last_sequence
+WHERE NOT ((la.outcome = 'Granted' AND ae.status = 'Granted')
+	OR (la.outcome = 'Rejected' AND ae.status = 'Rejected')
+	OR (la.outcome = 'Pending Disbursement' AND ae.status IN ('Approved','Signed'))
+	OR (la.outcome = 'Abandoned - No Documents Uploaded' AND ae.status = 'Submitted')
+	OR (la.outcome = 'Abandoned - Document Issues' AND ae.status = 'Docs Received')
+	OR (la.outcome = 'Abandoned - Post Approval' AND ae.status = 'Approved'));
+
+--- nessun risultato, pertanto coincidono
+

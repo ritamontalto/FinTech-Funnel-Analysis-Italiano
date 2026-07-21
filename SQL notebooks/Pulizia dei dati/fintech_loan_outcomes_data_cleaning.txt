@@ -1,0 +1,258 @@
+
+--- ATTIVITÀ DI PULIZIA DEI DATI, CONTROLLO QUALITÀ E VERIFICA DELLE REGOLE DI BUSINESS - LOAN OUTCOMES
+
+--- inizio verificando che ciascuna loan ID esiste nel dataset Loan Applications
+
+SELECT lo.loan_id
+FROM loan_outcomes AS lo
+LEFT JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+WHERE la.loan_id IS NULL;
+
+--- non ottengo risultato, quindi la condizione è valida
+
+--- essendo presenti loan ID anche nel dataset Application Events, verifico anche questa condizione 
+
+SELECT lo.loan_id
+FROM loan_outcomes AS lo
+LEFT JOIN application_events AS ae
+ON lo.loan_id = ae.loan_id
+WHERE ae.loan_id IS NULL;
+
+--- ottengo risultato, quindi la condizione è valida anche qui
+
+
+--- verifico le presenza di loan ID univoche confrontando i risultati delle query
+
+SELECT 
+COUNT(*)
+FROM loan_outcomes;
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM loan_outcomes;
+
+--- il risultato coincide
+
+
+--- controllo i dati nella colonna risk decision 
+
+SELECT risk_decision
+FROM loan_outcomes 
+GROUP BY risk_decision;
+
+
+--- ci sono dei valori mancanti che trasformo in valori nulli per standardizzarli
+
+SELECT risk_decision,
+CASE
+	WHEN risk_decision = '' THEN NULL 
+ELSE TRIM(risk_decision)
+END AS clean_risk_decision
+FROM loan_outcomes;
+
+
+--- adesso controllo la colonna risk segment 
+
+SELECT risk_segment
+FROM loan_outcomes
+GROUP BY risk_segment;
+
+
+--- anche qui ci sono dei valori mancanti che trasformo in valori nulli per standardizzarli
+
+SELECT risk_segment,
+CASE
+	WHEN risk_segment = '' THEN NULL 
+ELSE TRIM(risk_segment)
+END AS clean_risk_segment
+FROM loan_outcomes;
+
+
+--- verifico i dati nella colonna rejection reason 
+
+SELECT rejection_reason
+FROM loan_outcomes
+GROUP BY rejection_reason;
+
+
+--- ci sono dei valori mancanti che trasformo in valori nulli
+
+SELECT rejection_reason,
+CASE
+	WHEN rejection_reason = '' THEN NULL 
+ELSE TRIM(rejection_reason)
+END AS clean_rejection_reason
+FROM loan_outcomes;
+
+
+--- procedo con la verifica della qualità dei dati verificando che ciascun rejected loan ha esattamente un singolo rejected event
+
+SELECT loan_id,
+COUNT(*) AS rejected_events
+FROM application_events
+WHERE status = 'Rejected'
+GROUP BY loan_id
+HAVING COUNT(*) > 1;
+
+--- nessun risultato, pertanto la condizione è valida 
+
+
+--- continuo verificando che i dati nella colonna rejection reason coincidono con i dati nella colonna refusal reason del dataset Application Events 
+
+SELECT lo.loan_id, lo.rejection_reason, ae.refusal_reason
+FROM loan_outcomes AS lo
+JOIN application_events AS ae
+ON lo.loan_id = ae.loan_id
+WHERE ae.status = 'Rejected' AND lo.rejection_reason IS DISTINCT FROM ae.refusal_reason;
+
+--- nessun risultato, coincidono come previsto 
+
+
+--- adesso controllo i dati nella colonna approved amount 
+
+SELECT approved_amount
+FROM loan_outcomes
+GROUP BY approved_amount;
+
+
+--- poi nella colonna granted amount 
+
+SELECT granted_amount
+FROM loan_outcomes
+GROUP BY granted_amount;
+
+
+--- poi nella colonna estimated interest 
+
+SELECT estimated_interest
+FROM loan_outcomes
+GROUP BY estimated_interest;
+
+
+--- poi nella colonna final interest rate 
+
+SELECT final_interest_rate
+FROM loan_outcomes
+GROUP BY final_interest_rate;
+
+--- tutti sono omogenei 
+
+
+--- procedo con un'altra verifica di qualità dei dati, ovvero che i valori di interest rate non siano presenti per rejected loans
+
+SELECT 
+COUNT(*) AS invalid_interest_rate
+FROM loan_outcomes
+WHERE loan_status = 'Rejected' AND final_interest_rate IS NOT NULL;
+
+--- il risultato è zero, la condizione è valida
+
+
+--- adesso controllo i dati nella colonna loan status  
+
+SELECT loan_status
+FROM loan_outcomes
+GROUP BY loan_status;
+
+
+--- inoltre verifico la coerenza dei dati, ovvero che quando loan status è rejected, tutte le colonne con amount e interest sono vuote
+
+SELECT loan_id, loan_status, approved_amount, granted_amount, estimated_interest, final_interest_rate
+FROM loan_outcomes
+WHERE loan_status = 'Rejected' 
+	AND (approved_amount IS NOT NULL
+    	OR granted_amount IS NOT NULL
+    	OR estimated_interest IS NOT NULL
+		OR final_interest_rate IS NOT NULL);
+
+--- nessun risultato, la condizione è valida
+
+
+--- controllo i dati nella colonna charge off flag
+
+SELECT charge_off_flag
+FROM loan_outcomes 
+GROUP BY charge_off_flag;
+
+
+--- e procedo con una nuova verifica di coerenza dei dati, ovvero quando loan status è rejected, la colonna charge off flag deve essere uguale a zero
+
+SELECT loan_id, loan_status, charge_off_flag
+FROM loan_outcomes
+WHERE loan_status = 'Rejected' AND charge_off_flag = 1;
+
+--- nessun risultato, pertanto la condizione è valida
+
+
+--- controllo i dati nella colonna charge off date 
+
+SELECT charge_off_date
+FROM loan_outcomes 
+GROUP BY charge_off_date;
+
+
+--- i dati sono omogenei ma ci sono dei valori mancanti che trasformo in valori nulli per standardizzarli
+
+SELECT charge_off_date,
+CASE
+	WHEN charge_off_date = '' THEN NULL 
+ELSE charge_off_date
+END AS clean_charge_off_date
+FROM loan_outcomes;
+
+
+--- infine verifico che charge off date esiste solo quando charge off flag è uguale a 1
+
+SELECT loan_id, loan_status, charge_off_flag, charge_off_date
+FROM loan_outcomes
+WHERE charge_off_flag = 0 AND charge_off_date IS NOT NULL AND charge_off_date <> '';
+
+--- nessun risultato, la condizione è valida
+
+    
+--- terminato il processo di pulizia dei dati, procedo con la creazione di un nuovo dataset in modo da non modificare il dataset originale ed ottenere un dataset con i dati puliti da poter scaricare ed utilizzare per le analisi 
+
+
+CREATE TABLE loan_outcomes_clean AS
+SELECT loan_id,
+CASE
+	WHEN risk_decision = '' THEN NULL 
+ELSE TRIM(risk_decision)
+END AS risk_decision,
+CASE
+	WHEN risk_segment = '' THEN NULL 
+ELSE TRIM(risk_segment)
+END AS risk_segment,
+CASE
+	WHEN rejection_reason = '' THEN NULL 
+ELSE TRIM(rejection_reason)
+END AS rejection_reason,
+approved_amount,
+granted_amount,
+estimated_interest,
+final_interest_rate,
+loan_status,
+charge_off_flag,
+CASE
+	WHEN charge_off_date = '' THEN NULL 
+ELSE charge_off_date
+END AS charge_off_date
+FROM loan_outcomes;
+
+
+--- l'ultimo passo è verificare che la quantità di loan ID univoche coincidano su entrambi i dataset
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM loan_outcomes;
+
+
+SELECT 
+COUNT(DISTINCT loan_id)
+FROM loan_outcomes_clean;
+
+
+--- i risultati coincidono
+
+

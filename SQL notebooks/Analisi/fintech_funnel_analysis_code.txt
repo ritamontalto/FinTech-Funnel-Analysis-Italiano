@@ -1,0 +1,189 @@
+
+--- ANALISI DEL FUNNEL DELLE RICHIESTE DI PRESTITO
+
+--- Le analisi precedenti hanno esplorato le caratteristiche dei clienti, gli esiti delle richieste di prestito e le performance del portafoglio
+
+--- Questa sezione analizza come i richiedenti avanzano attraverso ogni fase del percorso di richiesta del prestito, identifica i punti in cui abbandonano il processo ed esplora quali segmenti di clientela presentano i più elevati livelli di abbandono.
+
+
+
+--- Q1: What are the stages of the loan application funnel? - Quali sono le fasi del funnel delle richieste di prestito?
+
+SELECT status,
+COUNT(*) AS event_records
+FROM application_events_clean
+GROUP BY status
+ORDER BY status;
+
+
+
+--- Q2: How many applications progress through each stage of the loan application funnel? - Quante richieste di prestito avanzano attraverso ciascuna fase del funnel di richiesta del prestito?
+
+SELECT status,
+COUNT(DISTINCT loan_id) AS applications
+FROM application_events_clean
+WHERE status <> 'Rejected'
+GROUP BY status
+ORDER BY 
+CASE
+    WHEN status = 'Submitted' THEN 1
+	WHEN status = 'Credit Check' THEN 2
+	WHEN status = 'Docs Received' THEN 3
+	WHEN status = 'Approved' THEN 4
+	WHEN status = 'Signed' THEN 5
+	WHEN status = 'Granted' THEN 6
+	WHEN status = 'Rejected' THEN 7
+END;
+
+
+
+--- Q3: What percentage of applications progress to each stage? - Quale percentuale di richieste di prestito avanza verso ciascuna fase del funnel?
+
+WITH funnel AS (
+SELECT status,
+COUNT(DISTINCT loan_id) AS applications,
+CASE
+	WHEN status = 'Submitted' THEN 1
+	WHEN status = 'Credit Check' THEN 2
+	WHEN status = 'Docs Received' THEN 3
+	WHEN status = 'Approved' THEN 4
+	WHEN status = 'Signed' THEN 5
+	WHEN status = 'Granted' THEN 6
+	WHEN status = 'Rejected' THEN 7
+END AS stage_order
+FROM application_events_clean
+WHERE status <> 'Rejected'
+GROUP BY status
+)
+SELECT status, applications,
+ROUND(CAST(applications AS NUMERIC) / MAX(applications) OVER () * 100, 2) AS conversion_rate
+FROM funnel
+ORDER BY stage_order;
+
+
+
+--- Q4: At which stage do we lose the highest proportion of applicants? - In quale fase perdiamo la percentuale più elevata di richiedenti?
+
+WITH funnel AS (
+SELECT status,
+COUNT(DISTINCT loan_id) AS applications,
+CASE
+	WHEN status = 'Submitted' THEN 1
+	WHEN status = 'Credit Check' THEN 2
+	WHEN status = 'Docs Received' THEN 3
+	WHEN status = 'Approved' THEN 4
+	WHEN status = 'Signed' THEN 5
+	WHEN status = 'Granted' THEN 6
+	WHEN status = 'Rejected' THEN 7
+END AS stage_order
+FROM application_events_clean
+WHERE status <> 'Rejected'
+GROUP BY status
+)
+SELECT status, applications,
+LAG(applications) OVER (ORDER BY stage_order) AS previous_stage,
+ROUND((CAST(applications AS NUMERIC) / LAG(applications) OVER (ORDER BY stage_order))* 100, 2) AS stage_conversion
+FROM funnel
+ORDER BY stage_order;
+
+
+
+
+--- Q5: What are the most common refusal reasons? - Quali sono i motivi di rifiuto più comuni?
+
+SELECT refusal_reason,
+COUNT(*) AS rejected
+FROM application_events_clean
+WHERE refusal_reason IS NOT NULL
+GROUP BY refusal_reason
+ORDER BY rejected DESC;
+
+
+
+
+--- Q6: What percentage of applications are rejected? - Quale percentuale di richieste di prestito viene rifiutata?
+
+SELECT
+COUNT(*) AS applications,
+SUM(CASE WHEN outcome='Rejected' THEN 1 ELSE 0 END) AS rejected,
+ROUND(CAST(SUM(CASE WHEN outcome='Rejected' THEN 1 ELSE 0 END) AS NUMERIC)
+/
+COUNT(*)*100, 2) AS rejection_rate
+FROM loan_applications;
+
+
+
+--- Q7: How does the application funnel vary across acquisition channels? - Come varia il funnel delle richieste di prestito tra i diversi canali di acquisizione?
+
+SELECT u.acquisition_channel, ae.status,
+COUNT(DISTINCT ae.loan_id) AS applications
+FROM application_events_clean AS ae
+JOIN loan_applications AS la
+ON ae.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.acquisition_channel, ae.status
+ORDER BY u.acquisition_channel, 
+CASE ae.status
+    WHEN 'Submitted' THEN 1
+    WHEN 'Credit Check' THEN 2
+    WHEN 'Docs Received' THEN 3
+    WHEN 'Approved' THEN 4
+    WHEN 'Signed' THEN 5
+    WHEN 'Granted' THEN 6
+    WHEN 'Rejected' THEN 7
+END;
+
+
+
+--- Q8: How does the application funnel vary across income groups? - Come varia il funnel delle richieste di prestito tra i diversi gruppi di reddito?
+
+SELECT u.income_range, ae.status,
+COUNT(DISTINCT ae.loan_id) AS applications
+FROM application_events_clean AS ae
+JOIN loan_applications AS la
+ON ae.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.income_range, ae.status
+ORDER BY u.income_range, 
+CASE ae.status
+    WHEN 'Submitted' THEN 1
+    WHEN 'Credit Check' THEN 2
+    WHEN 'Docs Received' THEN 3
+    WHEN 'Approved' THEN 4
+    WHEN 'Signed' THEN 5
+    WHEN 'Granted' THEN 6
+    WHEN 'Rejected' THEN 7
+END;
+
+
+--- Q9: How does the application funnel vary across credit score bands? - Come varia il funnel delle richieste di prestito tra le diverse fasce di punteggio creditizio?
+
+SELECT
+CASE
+	WHEN la.est_credit_score <550 THEN '<550'
+	WHEN la.est_credit_score <650 THEN '550-649'
+	WHEN la.est_credit_score <750 THEN '650-749'
+ELSE '750+'
+END AS score_band,
+ae.status,
+COUNT(DISTINCT ae.loan_id) AS applications
+FROM application_events_clean AS ae
+JOIN loan_applications AS la
+ON ae.loan_id = la.loan_id
+GROUP BY score_band, ae.status
+ORDER BY score_band, 
+CASE ae.status
+    WHEN 'Submitted' THEN 1
+    WHEN 'Credit Check' THEN 2
+    WHEN 'Docs Received' THEN 3
+    WHEN 'Approved' THEN 4
+    WHEN 'Signed' THEN 5
+    WHEN 'Granted' THEN 6
+    WHEN 'Rejected' THEN 7
+END;
+
+
+
+

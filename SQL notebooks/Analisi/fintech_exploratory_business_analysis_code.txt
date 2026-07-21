@@ -1,0 +1,431 @@
+
+--- ANALISI ESPLORATIVA BUSINESS 
+
+--- L’obiettivo è analizzare le caratteristiche dei clienti, gli esiti delle richieste di prestito e le performance del portafoglio per identificare i fattori che influenzano il funnel di richiesta del prestito, prima di analizzare la conversione e i punti di abbandono lungo il percorso del cliente.
+
+
+--- SEZIONE 1: COMPRENSIONE DEL BUSINESS
+
+--- Q1: How many customers and applications do we have? - Quanti clienti e richieste di prestito abbiamo?
+
+SELECT
+COUNT(DISTINCT user_id) AS total_customers
+FROM users_clean;
+
+
+SELECT
+COUNT(*) AS total_applications,
+COUNT(DISTINCT user_id) AS unique_applicants
+FROM loan_applications;
+
+
+
+--- Q2: How are loan applications distributed across different outcomes? - Come sono distribuite le richieste di prestito tra i diversi esiti?
+
+SELECT outcome,
+COUNT(*) AS applications
+FROM loan_applications
+GROUP BY outcome
+ORDER BY applications DESC;
+
+
+
+--- Q3: What are the demographic characteristics of our customer base? - Quali sono le caratteristiche demografiche della nostra base clienti?
+
+--- Età
+
+SELECT age_range,
+COUNT(*) AS customers
+FROM users_clean
+GROUP BY age_range
+ORDER BY age_range;
+
+
+--- Genere
+
+SELECT gender,
+COUNT(*) AS customers
+FROM users_clean
+GROUP BY gender
+ORDER BY customers DESC;
+
+
+--- Occupazione
+
+SELECT employment_status,
+COUNT(*) AS customers
+FROM users_clean
+GROUP BY employment_status
+ORDER BY customers DESC;
+
+
+--- Reddito
+
+SELECT income_range,
+COUNT(*) AS customers
+FROM users_clean
+GROUP BY income_range
+ORDER BY income_range;
+
+
+
+--- Q4: Which acquisition channels generate the highest volume of applicants? - Quali canali di acquisizione generano il maggior volume di richiedenti?
+
+SELECT acquisition_channel,
+COUNT(*) AS customers
+FROM users_clean
+GROUP BY acquisition_channel
+ORDER BY customers DESC;
+
+
+
+--- SEZIONE 2: PROFILO CLIENTI E ANALISI DELLE RICHIESTE
+
+
+--- Q5: Which customer segments contribute the most approved applications? - Quali segmenti di clientela contribuiscono maggiormente alle richieste di prestito approvate?
+
+--- Canale di acquisizione
+
+SELECT u.acquisition_channel,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE la.outcome = 'Granted'
+GROUP BY u.acquisition_channel
+ORDER BY applications DESC;
+
+
+--- Reddito
+
+SELECT u.income_range,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE la.outcome = 'Granted'
+GROUP BY u.income_range
+ORDER BY applications DESC;
+
+
+--- Età
+
+SELECT u.age_range,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE la.outcome = 'Granted'
+GROUP BY u.age_range
+ORDER BY applications DESC;
+
+
+
+--- Q6: Which application outcomes are most common? - Quali esiti delle richieste di prestito sono più frequenti?
+
+SELECT outcome,
+COUNT(*) AS applications
+FROM loan_applications
+GROUP BY outcome
+ORDER BY applications DESC;
+
+
+
+--- Q7: How do loan outcomes vary by gender? - Come variano gli esiti dei prestiti in base al genere?
+
+SELECT u.gender, la.outcome,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.gender, la.outcome
+ORDER BY u.gender, applications DESC;
+
+
+
+--- Q8: How does employment status influence loan outcomes? - Come lo stato occupazionale influenza gli esiti delle richieste di prestito?
+
+SELECT u.employment_status, la.outcome,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.employment_status, la.outcome
+ORDER BY u.employment_status, applications DESC;
+
+
+
+--- Q9: How do loan outcomes vary across different income groups? - Come variano gli esiti dei prestiti tra i diversi gruppi di reddito?
+
+SELECT u.income_range, la.outcome,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.income_range, la.outcome
+ORDER BY u.income_range, applications DESC;
+
+
+
+--- Q10: How do loan outcomes differ across age groups? - Come variano gli esiti dei prestiti tra le diverse fasce di età?
+
+SELECT u.age_range, la.outcome,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.age_range, la.outcome
+ORDER BY u.age_range, applications DESC;
+
+
+
+
+--- Q11: How do loan outcomes vary by region? - Come variano gli esiti dei prestiti in base alla regione?
+
+SELECT u.region, la.outcome,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.region, la.outcome
+ORDER BY u.region, applications DESC;
+
+
+
+--- Q12: How does borrowing behavior vary across different income groups? - Come varia il comportamento di indebitamento tra i diversi gruppi di reddito?
+
+SELECT u.income_range,
+ROUND(CAST(AVG(la.requested_amount) AS NUMERIC) ,2) AS avg_requested_amount
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.income_range
+ORDER BY avg_requested_amount DESC;
+
+
+
+--- Q13: How does borrowing behavior vary by employment status? - Come varia il comportamento di indebitamento in base allo stato occupazionale?
+
+SELECT u.employment_status,
+ROUND(CAST(AVG(la.requested_amount) AS NUMERIC), 2) AS avg_requested_amount
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id=u.user_id
+GROUP BY u.employment_status
+ORDER BY avg_requested_amount DESC;
+
+
+
+
+--- SEZIONE 3: ANALISI DEL RISCHIO CREDITIZIO
+
+--- Q14: How does estimated credit score vary across loan outcomes? - Come varia il punteggio creditizio stimato tra i diversi esiti delle richieste di prestito?
+
+SELECT outcome,
+ROUND(CAST(AVG(est_credit_score) AS NUMERIC), 1) AS avg_credit_score
+FROM loan_applications
+GROUP BY outcome
+ORDER BY avg_credit_score DESC;
+
+
+
+--- Q15: How does the requested loan amount differ across application outcomes? - Come varia l’importo del prestito richiesto tra i diversi esiti delle richieste di prestito?
+
+SELECT outcome,
+ROUND(CAST(AVG(requested_amount) AS NUMERIC), 2) AS avg_requested_amount
+FROM loan_applications
+GROUP BY outcome
+ORDER BY avg_requested_amount DESC;
+
+
+
+
+--- Q16: Which acquisition channels attract applicants with stronger credit profiles? - Quali canali di acquisizione attirano richiedenti con profili creditizi più solidi?
+
+SELECT u.acquisition_channel,
+ROUND(CAST(AVG(la.est_credit_score) AS NUMERIC), 1) AS avg_credit_score,
+COUNT(*) AS applications
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.acquisition_channel
+ORDER BY avg_credit_score DESC;
+
+
+
+--- Q17: Which acquisition channels have the highest application approval rates? - Quali canali di acquisizione hanno i tassi di approvazione delle richieste più elevati?
+
+SELECT u.acquisition_channel,
+COUNT(*) AS applications,
+SUM(CASE
+    	WHEN la.outcome = 'Granted' THEN 1
+        ELSE 0
+        END) AS "granted",
+ROUND(CAST(SUM(CASE
+               		WHEN la.outcome = 'Granted' THEN 1
+                	ELSE 0
+            		END) AS NUMERIC) / COUNT(*) * 100, 2) AS approval_rate
+FROM loan_applications AS la
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+GROUP BY u.acquisition_channel
+ORDER BY approval_rate DESC;
+
+
+
+--- SECTION 4: PERFORMANCE DEL PORTAFOGLIO PRESTITI 
+
+--- Q18: What percentage of granted loans were ultimately charged off? - Quale percentuale dei prestiti approvati è stata successivamente classificata come insolvente (charged off)?
+
+SELECT
+COUNT(*) AS granted_loans,
+SUM(charge_off_flag) AS charged_off_loans,
+ROUND(CAST(AVG(charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_outcomes
+WHERE loan_status = 'Granted';
+
+
+
+--- Q19: Which acquisition channels generate the highest proportion of charged-off loans? - Quali canali di acquisizione generano la maggiore percentuale di prestiti classificati come insolventi (charged-off)?
+
+SELECT u.acquisition_channel,
+COUNT(*) AS granted_loans,
+SUM(lo.charge_off_flag) AS charge_offs,
+ROUND(CAST(AVG(lo.charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.acquisition_channel
+ORDER BY charge_off_rate DESC;
+
+
+
+--- Q20: How do charge-off rates vary across credit score bands? - Come variano i tassi di insolvenza (charge-off) tra le diverse fasce di punteggio creditizio?
+
+SELECT
+CASE
+	WHEN la.est_credit_score < 550 THEN '<550'
+	WHEN la.est_credit_score < 650 THEN '550-649'
+	WHEN la.est_credit_score < 750 THEN '650-749'
+ELSE '750+'
+END AS credit_score_band,
+COUNT(*) AS granted_loans,
+SUM(lo.charge_off_flag) AS charged_off_loans,
+ROUND(CAST(AVG(lo.charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_applications AS la
+JOIN loan_outcomes AS lo
+ON la.loan_id = lo.loan_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY credit_score_band
+ORDER BY credit_score_band;
+
+
+
+--- Q21: How do average approved loan amounts vary across acquisition channels? - Come variano gli importi medi dei prestiti approvati tra i diversi canali di acquisizione?
+
+SELECT u.acquisition_channel,
+COUNT(*) AS granted_loans,
+ROUND(CAST(AVG(lo.granted_amount) AS NUMERIC), 2) AS avg_granted_amount
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.acquisition_channel
+ORDER BY avg_granted_amount DESC;
+
+
+
+--- Q22: How does the final interest rate vary across different credit score bands? - Come varia il tasso di interesse finale tra le diverse fasce di punteggio creditizio?
+
+SELECT
+CASE
+	WHEN est_credit_score < 550 THEN '<550'
+	WHEN est_credit_score < 650 THEN '550-649'
+	WHEN est_credit_score < 750 THEN '650-749'
+ELSE '750+'
+END AS score_band,
+ROUND(CAST(AVG(lo.final_interest_rate) AS NUMERIC), 2) AS avg_interest_rate,
+COUNT(*) AS loans
+FROM loan_applications AS la
+JOIN loan_outcomes AS lo
+ON la.loan_id = lo.loan_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY score_band
+ORDER BY score_band;
+
+
+
+--- Q23: How does the final interest rate vary across acquisition channels? - Come varia il tasso di interesse finale tra i diversi canali di acquisizione?
+
+SELECT u.acquisition_channel,
+COUNT(*) AS granted_loans,
+ROUND(CAST(AVG(lo.final_interest_rate) AS NUMERIC), 2) AS avg_interest_rate
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.acquisition_channel
+ORDER BY avg_interest_rate DESC;
+
+
+
+--- Q24: Which customer segments are associated with higher charge-off rates? - Quali segmenti di clientela sono associati a tassi di insolvenza (charge-off) più elevati?
+
+--- Per reddito
+
+SELECT u.income_range,
+COUNT(*) AS granted_loans,
+SUM(lo.charge_off_flag) AS charged_off_loans,
+ROUND(CAST(AVG(lo.charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.income_range
+ORDER BY charge_off_rate DESC;
+
+
+--- Per occupazione
+
+SELECT u.employment_status,
+COUNT(*) AS granted_loans,
+SUM(lo.charge_off_flag) AS charged_off_loans,
+ROUND(CAST(AVG(lo.charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.employment_status
+ORDER BY charge_off_rate DESC;
+
+
+--- Per canale di acquisizione
+
+SELECT u.acquisition_channel,
+COUNT(*) AS granted_loans,
+SUM(lo.charge_off_flag) AS charged_off_loans,
+ROUND(CAST(AVG(lo.charge_off_flag) AS NUMERIC) * 100, 2) AS charge_off_rate
+FROM loan_outcomes AS lo
+JOIN loan_applications AS la
+ON lo.loan_id = la.loan_id
+JOIN users_clean AS u
+ON la.user_id = u.user_id
+WHERE lo.loan_status = 'Granted'
+GROUP BY u.acquisition_channel
+ORDER BY charge_off_rate DESC;
+
+
+
+--- La sezione successiva si concentrerà sull’analisi del funnel delle richieste di prestito
+

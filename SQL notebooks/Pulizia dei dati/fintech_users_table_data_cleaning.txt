@@ -1,0 +1,433 @@
+
+--- ATTIVITÀ DI PULIZIA DEI DATI, CONTROLLO QUALITÀ E VERIFICA DELLE REGOLE DI BUSINESS - USERS
+
+--- inizio controllando la presenza di user ID univoche 
+
+SELECT 
+COUNT(*)
+FROM users;
+
+SELECT 
+COUNT(DISTINCT user_id)
+FROM users;
+
+--- le due query coincidono quindi non ci sono duplicati, solo utenti univoci per ciascun rigo 
+
+
+--- controllo se ci sono valori mancanti nella colonna first name 
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(first_name) AS present,
+COUNT(*)-COUNT(first_name) AS missing
+FROM users;
+
+
+--- nessuno, quindi pulisco il formato dei dati  
+
+SELECT first_name,
+INITCAP(TRIM(first_name)) AS clean_first_name
+FROM users;
+
+
+--- controllo se ci sono valori mancanti nella colonna surname 
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(surname) AS present,
+COUNT(*)-COUNT(surname) AS missing
+FROM users;
+
+
+--- nessuno, quindi pulisco il formato dei dati anche qui
+
+SELECT surname, 
+INITCAP(TRIM(surname)) AS clean_surname
+FROM users;
+
+
+--- controllo se ci sono valori mancanti nella colonna full name 
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(full_name) AS present,
+COUNT(*)-COUNT(full_name) AS missing
+FROM users;
+
+
+--- nessuno, quindi pulisco il formato dei dati 
+
+SELECT full_name, 
+INITCAP(TRIM(full_name)) AS clean_full_name
+FROM users;
+
+
+--- controllo se ci sono valori mancanti nella colonna city 
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(city) AS present,
+COUNT(*)-COUNT(city) AS missing
+FROM users;
+
+
+--- nessuno, quindi controllo il formato dei dati
+
+SELECT DISTINCT city
+FROM users
+GROUP BY city
+ORDER BY city;
+
+
+--- i dati non sono omogenei, quindi li pulisco per standardizzarli
+
+SELECT city,
+CASE
+    WHEN TRIM(city) = '' THEN NULL 
+ELSE INITCAP(TRIM(city))
+END AS clean_city
+FROM users;
+
+
+--- controllo i dati nella colonna region 
+
+SELECT DISTINCT region
+FROM users
+GROUP BY region
+ORDER BY region;
+
+
+--- il formato è omogeneo, ma ci sono dei valori mancanti che decido di rendere valori nulli  per standardizzarli
+
+SELECT region,
+CASE
+    WHEN TRIM(region) = '' THEN NULL 
+ELSE INITCAP(TRIM(region))
+END AS clean_region
+FROM users;
+
+
+--- poi controllo se ci sono valori mancanti nella colonna country
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(country) AS present,
+COUNT(*)-COUNT(country) AS missing
+FROM users;
+
+
+--- nessuno, quindi procedo col controllo dei dati
+
+SELECT DISTINCT country
+FROM users;
+
+
+--- trovo dei dati non omogenei, quindi li pulisco per standardizzarli
+
+SELECT country,
+CASE
+    WHEN TRIM(country) IN ('UK', 'uk', 'U.K.', 'United kingdom') THEN 'United Kingdom'
+	WHEN TRIM(country) = '' THEN NULL 
+ELSE INITCAP(TRIM(country))
+END AS clean_country
+FROM users;
+
+
+--- controllo se ci sono valori mancanti nella colonna age 
+
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(age) AS present,
+COUNT(*)-COUNT(age) AS missing
+FROM users;
+
+
+--- trovo 1525 valori mancanti. Adesso controllo i dati e verifico qual è il range d'età del totale degli utenti
+
+SELECT DISTINCT age
+FROM users
+ORDER BY age;
+
+
+--- e credo una nuova colonna con i range d'età che potrebbe essere utile per l'analisi più avanti, e definisco i valori nulli 
+
+SELECT age,
+CASE
+	WHEN age BETWEEN 20 AND 35 THEN '20-35'
+	WHEN age BETWEEN 36 AND 50 THEN '36-50'
+	WHEN age BETWEEN 51 AND 65 THEN '51-65'
+ELSE NULL
+END AS age_range
+FROM users;
+
+
+--- adesso controllo i dati nella colonna gender 
+
+SELECT gender
+FROM users
+GROUP BY gender;
+
+
+--- ci sono dei valori mancanti che decido di rendere valori nulli per standardizzarli
+
+SELECT gender,
+CASE 
+	WHEN TRIM(gender) = '' THEN NULL 
+ELSE INITCAP(TRIM(gender))
+END AS clean_gender
+FROM users;
+
+
+--- controllo se ci sono valori mancanti nella colonna income 
+
+SELECT
+COUNT(*) AS total_users,
+COUNT(income) AS present,
+COUNT(*)-COUNT(income) AS missing
+FROM users;
+
+
+--- trovo 1588 valori mancanti, quindi controllo i dati
+
+SELECT income
+FROM users
+WHERE income IS NOT NULL
+GROUP BY income
+ORDER BY income DESC;
+
+
+--- e decido di creare una colonna con range di reddito per agevolare l'analisi dopo, e definisco i valori nulli
+
+SELECT income,
+CASE
+	WHEN income = 0 THEN NULL 
+	WHEN income < 15000 THEN 'Under 15k'
+	WHEN income < 30000 THEN '15k-30k'
+	WHEN income < 50000 THEN '30k-50k'
+	WHEN income < 75000 THEN '50k-75k'
+	WHEN income < 85000 THEN '75k-85k'
+ELSE NULL
+END AS income_range
+FROM users;
+
+
+--- poi controllo i dati nella colonna employment status 
+
+SELECT employment_status
+FROM users
+GROUP BY employment_status;
+
+
+--- trovo dei valori mancanti e li trasformo in valori nulli  
+
+SELECT employment_status,
+CASE 
+	WHEN TRIM(employment_status) = '' THEN NULL 
+ELSE TRIM(employment_status)
+END AS clean_employment_status
+FROM users;
+
+
+--- adesso controllo i dati nella colonna marital status
+
+SELECT marital_status
+FROM users
+GROUP BY marital_status;
+
+
+--- trovo dei valori mancanti anche qui e li trasformo in valori nulli  
+
+SELECT marital_status,
+CASE 
+	WHEN TRIM(marital_status) = '' THEN NULL 
+ELSE TRIM(marital_status)  
+END AS clean_marital_status
+FROM users;
+
+
+--- poi controllo se ci sono degli indirizzi mail non valide nella colonna email 
+
+SELECT email
+FROM users
+WHERE email NOT LIKE '%@%.%'
+ORDER BY email DESC;
+
+
+--- e decido di sostituirli con valori nulli 
+
+SELECT email, 
+CASE 
+	WHEN TRIM(email) = '' THEN NULL
+	WHEN email NOT LIKE '%@%.%' THEN NULL
+ELSE LOWER(TRIM(email))
+END AS clean_email
+FROM users;
+
+
+--- inoltre verifico la presenza di duplicati nella colonna email
+
+SELECT email,
+COUNT(*)
+FROM users
+GROUP BY email
+HAVING COUNT(*)>1;
+
+--- nessuno
+
+
+--- controllo il formato dei dati nella colonna phone number 
+
+SELECT phone_number
+FROM users;
+
+SELECT phone_number
+FROM users
+WHERE phone_number IS NULL;
+
+
+--- qui i dati sono piuttosto disomogenei, bisogna sistemarli. Inizio rimuovendo i caratteri non numerici  
+
+SELECT phone_number,
+REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g') AS digits_only
+FROM users;
+
+
+--- procedo standardizzando il formato e definendo i valori nulli 
+
+SELECT phone_number,
+CASE
+    WHEN phone_number IS NULL THEN NULL
+    WHEN phone_number = '' THEN NULL
+    WHEN LEFT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 2) = '44' 
+    	THEN CONCAT('+', REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'))
+ELSE CONCAT('+44',RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10))
+END AS clean_phone_number
+FROM users;
+
+
+--- controllo i dati nella colonna acquisition channel 
+
+SELECT acquisition_channel
+FROM users
+GROUP BY acquisition_channel;
+
+
+--- ci sono dei valori mancanti che decido di trasformare in valori nulli per standardizzarli
+
+SELECT acquisition_channel,
+CASE
+	WHEN TRIM(acquisition_channel) = '' THEN NULL 
+ELSE TRIM(acquisition_channel)
+END AS clean_acquisition_channel
+FROM users;
+
+
+--- adesso procedo con dei controlli di qualità dei dati, inizio controllando la coerenza tra le colonne age ed employment status
+
+SELECT employment_status,
+MIN(age) AS min_age,
+MAX(age) AS max_age
+FROM users
+GROUP BY employment_status
+ORDER BY employment_status;
+
+--- i dati sono coerenti
+
+
+--- voglio controllare anche la coerenza dei dati tra le colonne income ed employment status
+
+SELECT employment_status,
+MIN(income) AS min_income,
+ROUND(AVG(income)) AS avg_income,
+MAX(income) AS max_income
+FROM users
+GROUP BY employment_status
+ORDER BY employment_status;
+
+--- alcuni utenti che risultano studenti e disoccupati hanno un reddito. I valori di reddito più alti sono meno di 15mila mentre la media è poco sotto i 7mila per entrambi. Si tratta di reddito basso, pertanto plausibile   
+
+
+--- ho terminato il processo di pulizia dei dati. Non volendo modificare il dataset originale, creo un nuovo dataset con i dati puliti che posso scaricare ed utilizzare per le mie analisi 
+
+
+CREATE TABLE users_clean AS 
+SELECT user_id,
+INITCAP(TRIM(first_name)) AS first_name,
+INITCAP(TRIM(surname)) AS surname,
+INITCAP(TRIM(full_name)) AS full_name,
+CASE
+    WHEN TRIM(city) = '' THEN NULL 
+ELSE INITCAP(TRIM(city))
+END AS city,
+CASE
+    WHEN TRIM(region) = '' THEN NULL 
+ELSE INITCAP(TRIM(region))
+END AS region,
+CASE
+    WHEN TRIM(country) IN ('UK', 'uk', 'U.K.', 'United kingdom') THEN 'United Kingdom'
+	WHEN TRIM(country) = '' THEN NULL 
+ELSE INITCAP(TRIM(country))
+END AS country,
+age,
+CASE
+	WHEN "age" BETWEEN 20 AND 35 THEN '20-35'
+	WHEN "age" BETWEEN 36 AND 50 THEN '36-50'
+	WHEN "age" BETWEEN 51 AND 65 THEN '51-65'
+ELSE NULL
+END AS age_range,
+CASE 
+	WHEN TRIM(gender) = '' THEN NULL 
+ELSE INITCAP(TRIM(gender))
+END AS gender,
+income, 
+CASE
+	WHEN income = 0 THEN NULL 
+	WHEN income < 15000 THEN 'Under 15k'
+	WHEN income < 30000 THEN '15k-30k'
+	WHEN income < 50000 THEN '30k-50k'
+	WHEN income < 75000 THEN '50k-75k'
+	WHEN income < 85000 THEN '75k-85k'
+ELSE NULL
+END AS income_range,
+CASE 
+	WHEN TRIM(employment_status) = '' THEN NULL 
+ELSE TRIM(employment_status) 
+END AS employment_status,
+CASE 
+	WHEN TRIM(marital_status) = '' THEN NULL 
+ELSE TRIM(marital_status) 
+END AS marital_status,
+CASE 
+	WHEN TRIM(email) = '' THEN NULL
+	WHEN email NOT LIKE '%@%.%' THEN NULL
+ELSE LOWER(TRIM(email))
+END AS email,
+CASE
+    WHEN phone_number IS NULL THEN NULL
+    WHEN phone_number = '' THEN NULL
+    WHEN LEFT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 2) = '44' 
+    	THEN CONCAT('+', REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'))
+ELSE CONCAT('+44',RIGHT(REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g'), 10))
+END AS phone_number,
+CASE
+	WHEN TRIM(acquisition_channel) = '' THEN NULL 
+ELSE TRIM(acquisition_channel)
+END AS acquisition_channel
+FROM users;
+
+
+--- infine controllo la quantità di user ID univoche su ciascun dataset, devono coincidere
+
+SELECT 
+COUNT(DISTINCT user_id)
+FROM users;
+
+
+SELECT 
+COUNT(DISTINCT user_id)
+FROM users_clean;
+
+
+--- il risultato coincide
+
